@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Données brutes chargées depuis le script SQL"
+    tables:
+      - name: customers
+        description: "Clients"
+      - name: orders
+        description: "Commandes (une ligne par commande)"
+      - name: orderitems
+        description: "Lignes de commande (une ligne par article)"
