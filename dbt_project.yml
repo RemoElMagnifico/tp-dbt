@@ -31,13 +31,23 @@ clean-targets:         # directories to be removed by `dbt clean`
 # files using the `{{ config(...) }}` macro.
 models:
   mon_projet:
+    +pre-hook: "insert into training.dbt_logs (model_name, action, inserted_at) values ('{{ this.name }}', 'start', now())"
+    +post-hook: "insert into training.dbt_logs (model_name, action, inserted_at) values ('{{ this.name }}', 'end', now())"
     silver:
       +schema: silver
       +materialized: view
     gold:
       +schema: gold
       +materialized: table
+    training:
+      +schema: gold
+      +materialized: table
 
 seeds:
   mon_projet:
     +schema: bronze
+
+vars:
+  eur_rate_us: 0.8906     # US
+  eur_rate_uk: 1.1777     # UK
+  eur_rate_inde: 0.00926  # Inde

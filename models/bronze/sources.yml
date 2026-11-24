@@ -3,11 +3,181 @@ version: 2
 sources:
   - name: bronze
     schema: bronze
-    description: "Données brutes chargées depuis le script SQL"
+    description: "Données brutes chargées depuis le script SQL, sans transformation"
     tables:
       - name: customers
-        description: "Clients"
+        description: "Clients de l'enseigne"
+        columns:
+          - name: customerid
+            description: "Identifiant unique du client (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: firstname
+            description: "Prénom"
+          - name: lastname
+            description: "Nom de famille"
+          - name: email
+            description: "Adresse e-mail"
+          - name: phone
+            description: "Numéro de téléphone"
+          - name: updated_at
+            description: "Date de dernière modification, utilisée par le snapshot"
+
       - name: orders
         description: "Commandes (une ligne par commande)"
+        columns:
+          - name: orderid
+            description: "Identifiant unique de la commande (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: orderdate
+            description: "Date de la commande"
+          - name: customerid
+            description: "Client ayant passé la commande (clé étrangère vers customers)"
+            tests:
+              - relationships:
+                  to: source('bronze', 'customers')
+                  field: customerid
+          - name: employeeid
+            description: "Employé ayant traité la commande (clé étrangère vers employees)"
+          - name: storeid
+            description: "Magasin où la commande a été passée (clé étrangère vers stores)"
+          - name: status
+            description: "Statut : 01 = En cours, 02 = Terminée, 03 = Annulée"
+            tests:
+              - accepted_values:
+                  values: ['01', '02', '03']
+          - name: updated_at
+            description: "Date de dernière modification"
+
       - name: orderitems
-        description: "Lignes de commande (une ligne par article)"
+        description: "Lignes de commande (une ligne par article commandé)"
+        columns:
+          - name: orderid
+            description: "Commande à laquelle appartient la ligne (clé étrangère vers orders)"
+            tests:
+              - not_null
+              - relationships:
+                  to: source('bronze', 'orders')
+                  field: orderid
+          - name: productid
+            description: "Produit commandé (clé étrangère vers products)"
+          - name: quantity
+            description: "Quantité commandée"
+          - name: unitprice
+            description: "Prix unitaire au moment de la commande"
+
+      - name: employees
+        description: "Employés des magasins"
+        columns:
+          - name: employeeid
+            description: "Identifiant unique de l'employé (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: jobtitle
+            description: "Poste occupé"
+          - name: managerid
+            description: "Responsable hiérarchique (renvoie à un autre employeeid)"
+          - name: hiredate
+            description: "Date d'embauche"
+
+      - name: stores
+        description: "Magasins de l'enseigne"
+        columns:
+          - name: storeid
+            description: "Identifiant unique du magasin (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: storename
+            description: "Nom du magasin"
+          - name: city
+            description: "Ville"
+
+      - name: suppliers
+        description: "Fournisseurs des produits"
+        columns:
+          - name: supplierid
+            description: "Identifiant unique du fournisseur (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: suppliername
+            description: "Raison sociale"
+          - name: contactperson
+            description: "Personne à contacter chez le fournisseur"
+
+      - name: products
+        description: "Catalogue des produits"
+        columns:
+          - name: productid
+            description: "Identifiant unique du produit (clé primaire)"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Nom du produit"
+          - name: category
+            description: "Catégorie (ex. Sports)"
+          - name: retailprice
+            description: "Prix de vente public"
+          - name: supplierprice
+            description: "Prix d'achat au fournisseur"
+          - name: supplierid
+            description: "Fournisseur du produit (clé étrangère vers suppliers)"
+
+models:
+  - name: customers_v
+    description: "Clients nettoyés, avec le nom complet (prénom en majuscules)"
+    columns:
+      - name: fullname
+        description: "PRÉNOM Nom"
+
+  - name: orders
+    description: "Commandes avec le libellé du statut"
+    columns:
+      - name: StatusDescription
+        description: "Traduction du statut : En cours / Terminée / Annulée"
+
+  - name: order_items
+    description: "Lignes de commande avec le prix total par ligne"
+    columns:
+      - name: TotalPrice
+        description: "quantity * unitprice"
+
+  - name: fact_orders
+    description: "Nombre de commandes et montant total par client, employé, magasin et statut"
+    columns:
+      - name: nb_commandes
+        description: "Nombre de commandes distinctes (count distinct orderid)"
+      - name: montant_total
+        description: "Somme des TotalPrice"
+
+  - name: customer_revenu
+    description: "Nombre de commandes et revenu généré par client"
+    columns:
+      - name: customerid
+        description: "Identifiant du client"
+        tests:
+          - unique
+          - not_null
+      - name: fullname
+        description: "Nom complet du client"
+      - name: revenu
+        description: "Somme des montants de toutes ses commandes"
+
+  - name: store_performance
+    description: "Revenu réel comparé à l'objectif de ventes, par magasin"
+    columns:
+      - name: objectif_ventes
+        description: "Objectif issu du seed salestarget"
+      - name: ecart
+        description: "revenu_actuel - objectif_ventes (positif = objectif dépassé)"
+      - name: pct_objectif
+        description: "Pourcentage d'atteinte de l'objectif"
+
+  - name: orderitems_unique
+    description: "Lignes de commande dédoublonnées avec dbt_utils.deduplicate (version la plus récente conservée)"
